@@ -2,7 +2,7 @@ import * as React from "react";
 
 export type RenderableNode = {
   id: string,
-  type: React.ReactType,
+  type: React.ElementType,
   props: Object | null,
   children: Array<RenderableNode | String | number> | null,
 }
@@ -37,7 +37,7 @@ const RenderNode = (props: RenderableNode) => {
 const Renderable = (props: RenderableRootProps) => {
   return (
     <>
-      { props.content.children.map((child) => <RenderNode {...child} />) }
+      { props.content.children.map((child) => <RenderNode key={(child as RenderableNode).id} {...child} />) }
     </>
   );
 };
