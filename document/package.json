@@ -37,8 +37,8 @@
     "react": "^16.13.1"
   },
   "scripts": {
-    "build": "rollup -c",
-    "watch": "rollup -c -w",
+    "build": "tsc --project tsconfig.json --outDir build",
+    "watch": "tsc --project tsconfig.json --outDir build --watch",
     "dev": "npm-run-all --parallel start watch",
     "test": "mocha -r ts-node/register test/setup.ts test/*.spec.tsx",
     "test:debug": "mocha --inspect -r ts-node/register test/setup.ts test/*.spec.tsx",
