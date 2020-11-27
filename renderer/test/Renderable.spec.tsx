@@ -2,25 +2,25 @@ import * as React from 'react';
 import { expect } from 'chai';
 import { mount } from 'enzyme';
 
-import Renderable, { ComponentType, RenderableNode, Versions, TemplateComponent } from '../src/Renderable';
+import Document, { TanukiComponentType, TanukiElementProps, TanukiVersions } from '../src/Renderable';
 
 describe('Renderable', () => {
   it('runs a program tree', function() {
     const file = {
-      version: Versions.v1,
+      version: TanukiVersions.v1,
       components: {},
       body: [
-        { id: 'a', type: 'div', nodes: ['testing'], props: { 'className': 'test-name'} } as RenderableNode,
+        { id: 'a', type: 'div', nodes: ['testing'], props: { 'className': 'test-name'} } as TanukiElementProps,
       ],
     };
-    const node = mount(<Renderable {...file} />);
+    const node = mount(<Document {...file} />);
     expect(node.text()).to.eq('testing');
     expect(node.find('.test-name').length).to.eq(1);
   });
 
   it('can render a module based component', function() {
     const file = {
-      version: Versions.v1,
+      version: TanukiVersions.v1,
       components: {
         'button': {
           options: {},
@@ -28,11 +28,11 @@ describe('Renderable', () => {
         }
       },
       body: [
-        { id: 'a', type: 'div', nodes: ['testing1'], props: { 'className': 'test-name'} } as RenderableNode,
-        { id: 'b', type: ComponentType.module, componentType: 'button', nodes: ['testing2'], props: { 'className': 'meow'} } as RenderableNode,
+        { id: 'a', type: 'div', nodes: ['testing1'], props: { 'className': 'test-name'} } as TanukiElementProps,
+        { id: 'b', type: TanukiComponentType.module, componentType: 'button', nodes: ['testing2'], props: { 'className': 'meow'} } as TanukiElementProps,
       ],
     };
-    const node = mount(<Renderable {...file} />);
+    const node = mount(<Document {...file} />);
     expect(node.text()).to.eq('testing1testing2');
 
     // NOTE: using find('button') seems a bit unreliable here. The final render does indeed give the correct result.
@@ -44,7 +44,7 @@ describe('Renderable', () => {
 
   it('can render a template component', function() {
     const file = {
-      version: Versions.v1,
+      version: TanukiVersions.v1,
       components: {
         'button': {
           options: {
@@ -65,15 +65,15 @@ describe('Renderable', () => {
                 nodes: ["${options.text}"]
               }
             ],
-          } as TemplateComponent,
+          } as TanukiElementProps,
         },
       },
       body: [
-        { id: 'a', type: 'div', nodes: ['testing1'], props: { 'className': 'test-name'} } as RenderableNode,
-        { id: 'b', type: ComponentType.template, componentType: 'button', options: { href: 'https://tanuki.fun', text: 'Pizza'} } as RenderableNode,
+        { id: 'a', type: 'div', nodes: ['testing1'], props: { 'className': 'test-name'} } as TanukiElementProps,
+        { id: 'b', type: TanukiComponentType.template, componentType: 'button', options: { href: 'https://tanuki.fun', text: 'Pizza'} } as TanukiElementProps,
       ],
     };
-    const node = mount(<Renderable debug={true} {...file} />);
+    const node = mount(<Document debug={true} {...file} />);
     expect(node.text()).to.eq('testing1Pizza');
 
     expect(node.find('a').first().props().href).to.eq('https://tanuki.fun');

@@ -9,20 +9,6 @@ const production = !process.env.ROLLUP_WATCH;
 
 export default [
 	{
-		input: 'src/example/main.tsx',
-		output: {
-			file: 'public/bundle.js',
-			format: 'iife', // immediately-invoked function expression — suitable for <script> tags
-			sourcemap: true
-		},
-		plugins: [
-			typescript(),
-			resolve(), // tells Rollup how to find date-fns in node_modules
-			commonjs(), // converts date-fns to ES modules
-			production && terser(), // minify, but only in production
-		]
-	},
-	{
 		input: 'src/lib.ts',
 		output: {
 			name: 'tanuki',

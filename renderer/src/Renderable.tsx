@@ -1,41 +1,38 @@
 import * as React from "react";
 import * as templateStrings from 'es6-template-string';
 
-export enum Versions {
+export enum TanukiVersions {
   v1 = 'v1.0'
 };
 
-export enum ComponentType {
+export enum TanukiComponentType {
   module = 'module',
   template = 'templates',
 };
 
-export type TemplateComponent = {
+export type TanukiElementProps = {
   id: string,
-  type: React.ElementType | ComponentType,
+  type: React.ElementType | TanukiComponentType,
   componentType?: string,
   options?: object,
   props?: object | null,
-  nodes?: Array<TemplateComponent | String | number> | null,
+  nodes?: Array<TanukiElementProps | String | number> | null,
+  _templatedParentId?: 'string';
 };
 
-export interface RenderableNode extends TemplateComponent {
-  _templatedParentId?: 'string';
-}
-
-export type ComponentDefinition = {
+export type TanukiComponent = {
   availableOptions?: Record<string, any>,
-  template?: TemplateComponent,
+  template?: TanukiElementProps,
   render?: React.ElementType,
 };
 
-export type Document = {
-  version: Versions,
+export type DocumentProps = {
+  version: TanukiVersions,
   debug?: boolean,
   styles?: Record<string, React.CSSProperties>,
-  templates?: Record<string, RenderableNode>,
-  components?: Record<string, ComponentDefinition>,
-  body: Array<RenderableNode>,
+  templates?: Record<string, TanukiElementProps>,
+  components?: Record<string, TanukiComponent>,
+  body: Array<TanukiElementProps>,
 };
 
 const fillTemplateString = (templateString: string, inputVars: { options?: object }) => {
@@ -67,10 +64,10 @@ const deepProcessStrings = (obj: Record<string, any>, data: { options?: object }
   return newRootObj;
 };
 
-const TanukiDocumentContext = React.createContext<Document>({ version: Versions.v1, body: [] });
+const TanukiDocumentContext = React.createContext<DocumentProps>({ version: TanukiVersions.v1, body: [] });
 const useTanukiDocumentContext = () => React.useContext(TanukiDocumentContext);
 
-const RenderNode = (props: RenderableNode) => {
+const TanukiElement = (props: TanukiElementProps) => {
   let {type, id, componentType, nodes, _templatedParentId, ...otherProps} = props;
   const rootProps = useTanukiDocumentContext();
 
@@ -79,13 +76,13 @@ const RenderNode = (props: RenderableNode) => {
   let Component;
   let templateProps = {};
 
-  if (type === ComponentType.module) {
+  if (type === TanukiComponentType.module) {
     const renderer = customComponent?.render ?? null;
     if (!renderer) {
       console.warn(`Non-existant component type referenced ${componentType} for node ${id}, using a Fragment instead.`);
     }
     Component = renderer ?? React.Fragment;
-  } else if (type === ComponentType.template) {
+  } else if (type === TanukiComponentType.template) {
     const template = customComponent?.template ?? null;
     if (!template) {
       console.warn(`Non-existant component type referenced ${componentType} for node ${id}, using a Fragment instead.`);
@@ -93,7 +90,7 @@ const RenderNode = (props: RenderableNode) => {
     } else {
       // Template component types must be standard React.ElementTypes. Tanuki Component types are not allowed at the root.
       Component = template.type as React.ElementType;
-      templateProps = { ...template.props } as TemplateComponent;
+      templateProps = { ...template.props } as TanukiElementProps;
       nodes = template.nodes;
     }
   } else {
@@ -105,7 +102,7 @@ const RenderNode = (props: RenderableNode) => {
     ...templateProps,
     ...otherProps.props,
     ...(
-      type === ComponentType.module ? {
+      type === TanukiComponentType.module ? {
         options: otherProps.options,
       } : {}
     )
@@ -120,10 +117,10 @@ const RenderNode = (props: RenderableNode) => {
             return fillTemplateString(child, { options: otherProps.options });
           }
           return child;
-        } else if (['string', 'function'].includes(typeof (child as RenderableNode).type)) {
-          const childProps = (child as RenderableNode);
+        } else if (['string', 'function'].includes(typeof (child as TanukiElementProps).type)) {
+          const childProps = (child as TanukiElementProps);
 
-          const _parentId = type === ComponentType.template ? props.id : _templatedParentId;
+          const _parentId = type === TanukiComponentType.template ? props.id : _templatedParentId;
           const hasTemplateParentId = Boolean(_parentId);
           const id = `${hasTemplateParentId ? `${_parentId}-` : '' }${childProps.id}`;
           const optionalChildProps = {
@@ -134,7 +131,7 @@ const RenderNode = (props: RenderableNode) => {
             _templateParentId: _parentId,
           };
 
-          return <RenderNode key={id} {...childProps} id={id} {...optionalChildProps} />;
+          return <TanukiElement key={id} {...childProps} id={id} {...optionalChildProps} />;
         }
 
         return null;
@@ -143,12 +140,12 @@ const RenderNode = (props: RenderableNode) => {
   );
 }
 
-const Renderable = (props: Document) => {
+const Document = (props: DocumentProps) => {
   return (
     <TanukiDocumentContext.Provider value={props}>
-      { props.body.map((child) => <RenderNode key={(child as RenderableNode).id} {...child} />) }
+      { props.body.map((child) => <TanukiElement key={(child as TanukiElementProps).id} {...child} />) }
     </TanukiDocumentContext.Provider>
   );
 };
 
-export default Renderable;
+export default Document;
