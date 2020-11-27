@@ -2,15 +2,15 @@ import * as React from 'react';
 import { expect } from 'chai';
 import { mount } from 'enzyme';
 
-import Document, { TanukiComponentType, TanukiElementProps, TanukiVersions } from '../src/Renderable';
+import { Document, ComponentTypes, ElementProps, Versions } from '../src/lib';
 
-describe('Renderable', () => {
+describe('Document', () => {
   it('runs a program tree', function() {
     const file = {
-      version: TanukiVersions.v1,
+      version: Versions.v1,
       components: {},
       body: [
-        { id: 'a', type: 'div', nodes: ['testing'], props: { 'className': 'test-name'} } as TanukiElementProps,
+        { id: 'a', type: 'div', nodes: ['testing'], props: { 'className': 'test-name'} } as ElementProps,
       ],
     };
     const node = mount(<Document {...file} />);
@@ -20,7 +20,7 @@ describe('Renderable', () => {
 
   it('can render a module based component', function() {
     const file = {
-      version: TanukiVersions.v1,
+      version: Versions.v1,
       components: {
         'button': {
           options: {},
@@ -28,8 +28,8 @@ describe('Renderable', () => {
         }
       },
       body: [
-        { id: 'a', type: 'div', nodes: ['testing1'], props: { 'className': 'test-name'} } as TanukiElementProps,
-        { id: 'b', type: TanukiComponentType.module, componentType: 'button', nodes: ['testing2'], props: { 'className': 'meow'} } as TanukiElementProps,
+        { id: 'a', type: 'div', nodes: ['testing1'], props: { 'className': 'test-name'} } as ElementProps,
+        { id: 'b', type: ComponentTypes.module, componentType: 'button', nodes: ['testing2'], props: { 'className': 'meow'} } as ElementProps,
       ],
     };
     const node = mount(<Document {...file} />);
@@ -44,7 +44,7 @@ describe('Renderable', () => {
 
   it('can render a template component', function() {
     const file = {
-      version: TanukiVersions.v1,
+      version: Versions.v1,
       components: {
         'button': {
           options: {
@@ -65,12 +65,12 @@ describe('Renderable', () => {
                 nodes: ["${options.text}"]
               }
             ],
-          } as TanukiElementProps,
+          } as ElementProps,
         },
       },
       body: [
-        { id: 'a', type: 'div', nodes: ['testing1'], props: { 'className': 'test-name'} } as TanukiElementProps,
-        { id: 'b', type: TanukiComponentType.template, componentType: 'button', options: { href: 'https://tanuki.fun', text: 'Pizza'} } as TanukiElementProps,
+        { id: 'a', type: 'div', nodes: ['testing1'], props: { 'className': 'test-name'} } as ElementProps,
+        { id: 'b', type: ComponentTypes.template, componentType: 'button', options: { href: 'https://tanuki.fun', text: 'Pizza'} } as ElementProps,
       ],
     };
     const node = mount(<Document debug={true} {...file} />);
