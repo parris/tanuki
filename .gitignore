@@ -1,6 +1,6 @@
 node_modules
 .vscode
-tanuki_ui/build
-tanuki_ui/public
-!tanuki_ui/public/index.html
+document/build
+document/public
+!document/public/index.html
 yarn-error.log
