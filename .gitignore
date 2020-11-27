@@ -3,3 +3,4 @@ node_modules
 tanuki_ui/build
 tanuki_ui/public
 !tanuki_ui/public/index.html
+yarn-error.log
