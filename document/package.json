@@ -1,5 +1,5 @@
 {
-  "name": "tanuki",
+  "name": "@tanuki/document",
   "main": "./build/lib.js",
   "types": "./build/lib.d.ts",
   "license": "MIT",

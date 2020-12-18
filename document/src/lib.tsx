@@ -27,12 +27,12 @@ export type ComponentDefinition = {
 };
 
 export type DocumentProps = {
-  version: Versions,
   debug?: boolean,
-  styles?: Record<string, React.CSSProperties>,
-  templates?: Record<string, ElementProps>,
+  file: {
+    version: Versions,
+    body: Array<ElementProps>,
+  },
   components?: Record<string, ComponentDefinition>,
-  body: Array<ElementProps>,
 };
 
 const fillTemplateString = (templateString: string, inputVars: { options?: object }) => {
@@ -64,7 +64,7 @@ const deepProcessStrings = (obj: Record<string, any>, data: { options?: object }
   return newRootObj;
 };
 
-const TanukiDocumentContext = React.createContext<DocumentProps>({ version: Versions.v1, body: [] });
+const TanukiDocumentContext = React.createContext<DocumentProps>({ file: { version: Versions.v1, body: [] } });
 const useTanukiDocumentContext = () => React.useContext(TanukiDocumentContext);
 
 const TanukiElement = (props: ElementProps) => {
@@ -143,7 +143,7 @@ const TanukiElement = (props: ElementProps) => {
 export const Document = (props: DocumentProps) => {
   return (
     <TanukiDocumentContext.Provider value={props}>
-      { props.body.map((child) => <TanukiElement key={(child as ElementProps).id} {...child} />) }
+      { props.file.body.map((child) => <TanukiElement key={(child as ElementProps).id} {...child} />) }
     </TanukiDocumentContext.Provider>
   );
 };

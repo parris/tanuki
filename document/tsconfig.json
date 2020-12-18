@@ -12,9 +12,9 @@
     "noImplicitReturns": true,
     "noImplicitThis": true,
     "noImplicitAny": true,
-    "strictNullChecks": true,
+    "strictNullChecks": true
   },
-  "include": ["src/**/*", "src/*"],
+  "include": ["src/**/*", "src/*", "test/*", "test/**/*"],
   "formatCodeOptions": {
     "indentSize": 2,
     "tabSize": 2,
