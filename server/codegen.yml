@@ -1,0 +1,14 @@
+overwrite: true
+schema:
+  './src/**/*.ts':
+    noRequire: true
+documents: null
+generates:
+  src/generated/graphql.ts:
+    config:
+      useIndexSignature: true
+    plugins:
+      - add:
+          content: '/* tslint:disable */'
+      - 'typescript'
+      - 'typescript-resolvers'

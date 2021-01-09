@@ -4,3 +4,4 @@ document/build
 document/public
 !document/public/index.html
 yarn-error.log
+.env-personal
