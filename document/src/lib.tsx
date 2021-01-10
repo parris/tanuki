@@ -12,17 +12,23 @@ export enum ComponentTypes {
 
 export type ElementProps = {
   id: string,
-  type: React.ElementType | ComponentTypes,
-  componentType?: string,
+  type: string,
   options?: object,
-  props?: object | null,
-  nodes?: Array<ElementProps | String | number> | null,
+  props?: object,
+  content?: string | number,
+  childIds?: Array<string>,
   _templatedParentId?: 'string';
 };
 
+export type Template = {
+  nodes: Record<string, ElementProps>,
+  root: Array<string>,
+};
+
 export type ComponentDefinition = {
+  type: ComponentTypes,
   availableOptions?: Record<string, any>,
-  template?: ElementProps,
+  template?: Template,
   render?: React.ElementType,
 };
 
@@ -30,9 +36,11 @@ export type DocumentProps = {
   debug?: boolean,
   file: {
     version: Versions,
-    body: Array<ElementProps>,
+    nodes: Record<string, ElementProps>,
+    root: Array<string>,
   },
   components?: Record<string, ComponentDefinition>,
+  prefixIds?: string,
 };
 
 const fillTemplateString = (templateString: string, inputVars: { options?: object }) => {
@@ -52,8 +60,12 @@ const deepProcessStrings = (obj: Record<string, any>, data: { options?: object }
     const currentKeys = Object.keys(currentObj);
     currentKeys.forEach((key) => {
       if (typeof currentObj[key] === 'object') {
-        // spread operator ensures all new references here
-        currentObj[key] = { ...currentObj[key] };
+        if (currentObj[key] instanceof Array) {
+          currentObj[key] = [ ...currentObj[key] ];
+        } else {
+          // spread operator ensures all new references here
+          currentObj[key] = { ...currentObj[key] };
+        }
         todo.push(currentObj[key]);
       } else if (typeof currentObj[key] === 'string') {
         currentObj[key] = fillTemplateString(currentObj[key], data);
@@ -64,78 +76,67 @@ const deepProcessStrings = (obj: Record<string, any>, data: { options?: object }
   return newRootObj;
 };
 
-const TanukiDocumentContext = React.createContext<DocumentProps>({ file: { version: Versions.v1, body: [] } });
+const TanukiDocumentContext = React.createContext<DocumentProps>({ file: { version: Versions.v1, nodes: {}, root: [] } });
 const useTanukiDocumentContext = () => React.useContext(TanukiDocumentContext);
 
 const TanukiElement = (props: ElementProps) => {
-  let {type, id, componentType, nodes, _templatedParentId, ...otherProps} = props;
+  let {type, id, childIds, _templatedParentId, ...otherProps} = props;
   const rootProps = useTanukiDocumentContext();
 
-  // strange typescript issue here with optional chaining before brackets
-  const customComponent = ((rootProps?.components) ?? {})[(componentType ?? '')];
-  let Component;
-  let templateProps = {};
+  let Component: string | React.FunctionComponent<any> | React.ComponentClass<any, any> = type;
 
-  if (type === ComponentTypes.module) {
+  const customComponent = rootProps?.components?.[type] ?? null;
+  if (customComponent && customComponent.type === ComponentTypes.module) {
     const renderer = customComponent?.render ?? null;
     if (!renderer) {
-      console.warn(`Non-existant component type referenced ${componentType} for node ${id}, using a Fragment instead.`);
+      console.warn(`"renderer" missing for custom component "${type}", which is required for "module" components, using a React.Fragment instead.`);
     }
     Component = renderer ?? React.Fragment;
-  } else if (type === ComponentTypes.template) {
-    const template = customComponent?.template ?? null;
-    if (!template) {
-      console.warn(`Non-existant component type referenced ${componentType} for node ${id}, using a Fragment instead.`);
-      Component = React.Fragment;
-    } else {
-      // Template component types must be standard React.ElementTypes. Tanuki Component types are not allowed at the root.
-      Component = template.type as React.ElementType;
-      templateProps = { ...template.props } as ElementProps;
-      nodes = template.nodes;
-    }
-  } else {
-    Component = type;
   }
 
-  let nodeProps = deepProcessStrings({
-    ...(rootProps?.debug ? { 'data-tanuki-id': id } : {}),
-    ...templateProps,
+  if (customComponent && customComponent.type === ComponentTypes.template) {
+    const template = customComponent?.template ?? null;
+    if (!template) {
+      console.warn(`"template" missing for custom component "${type}", which is required for "template" components, using a React.Fragment instead.`);
+      Component = React.Fragment;
+    } else {
+      return (
+        <Document
+          debug={rootProps.debug}
+          file={{
+            version: rootProps.file.version,
+            nodes: deepProcessStrings(template.nodes, { options: otherProps.options }) as Record<string, ElementProps>,
+            root: template.root,
+          }}
+          components={rootProps.components}
+          prefixIds={rootProps.prefixIds ? `${rootProps.prefixIds}-${id}`: id }
+        />
+      );
+    }
+  }
+
+  let nodeProps = {
+    ...(rootProps?.debug ? {
+      'data-tanuki-id': (rootProps.prefixIds ? `${rootProps.prefixIds}-${id}` : id),
+    } : {}),
     ...otherProps.props,
     ...(
       type === ComponentTypes.module ? {
         options: otherProps.options,
       } : {}
     )
-  }, { options: otherProps.options });
+  };
 
   return (
     <Component {...nodeProps}>
-      { nodes?.map((child) : React.ReactNode => {
-        const isImmediatelyRenderable = typeof child === 'number' || typeof child === 'string';
-        if (isImmediatelyRenderable) {
-          if (typeof child === 'string') {
-            return fillTemplateString(child, { options: otherProps.options });
-          }
-          return child;
-        } else if (['string', 'function'].includes(typeof (child as ElementProps).type)) {
-          const childProps = (child as ElementProps);
-
-          const _parentId = type === ComponentTypes.template ? props.id : _templatedParentId;
-          const hasTemplateParentId = Boolean(_parentId);
-          const id = `${hasTemplateParentId ? `${_parentId}-` : '' }${childProps.id}`;
-          const optionalChildProps = {
-            options: {
-              ...(props.options || {}),
-              ...(childProps.options || {}),
-            },
-            _templateParentId: _parentId,
-          };
-
-          return <TanukiElement key={id} {...childProps} id={id} {...optionalChildProps} />;
-        }
-
-        return null;
+      { (props.childIds ?? [])
+        .map<ElementProps | null>((id: string) => rootProps.file.nodes?.[id] ?? null)
+        .map((child) : React.ReactNode => {
+          if (!child) { return; }
+          return <TanukiElement key={child.id} {...child} />
       }) as React.ReactNode[] }
+      { typeof props.content === 'string' ? fillTemplateString(props.content, { options: otherProps.options }) : null }
+      { typeof props.content === 'number' ? props.content : null }
     </Component>
   );
 }
@@ -143,7 +144,11 @@ const TanukiElement = (props: ElementProps) => {
 export const Document = (props: DocumentProps) => {
   return (
     <TanukiDocumentContext.Provider value={props}>
-      { props.file.body.map((child) => <TanukiElement key={(child as ElementProps).id} {...child} />) }
+      { props.file.root.map((childId) => {
+          const childNode = props.file.nodes[childId];
+          return (<TanukiElement key={childNode.id} {...childNode} />);
+        })
+      }
     </TanukiDocumentContext.Provider>
   );
 };

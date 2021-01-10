@@ -2,16 +2,16 @@ import * as React from 'react';
 import { expect } from 'chai';
 import { mount } from 'enzyme';
 
-import { Document, ComponentTypes, ElementProps, Versions } from '../src/lib';
+import { Document, ComponentTypes, ElementProps, Versions, Template } from '../src/lib';
 
 describe('Document', () => {
   it('runs a program tree', function() {
     const file = {
       version: Versions.v1,
-      components: {},
-      body: [
-        { id: 'a', type: 'div', nodes: ['testing'], props: { 'className': 'test-name'} } as ElementProps,
-      ],
+      nodes: {
+        'a': { id: 'a', type: 'div', content: 'testing', props: { 'className': 'test-name'} } as ElementProps,
+      },
+      root: ['a'],
     };
     const node = mount(<Document file={file} components={{}} />);
     expect(node.text()).to.eq('testing');
@@ -20,17 +20,19 @@ describe('Document', () => {
 
   it('can render a module based component', function() {
     const components = {
-      'button': {
+      'Button': {
+        type: ComponentTypes.module,
         options: {},
         render: ({ className, children }: { className: string, children: React.ReactNode }) => (<button className={className}>{children}</button>),
       }
     };
     const file = {
       version: Versions.v1,
-      body: [
-        { id: 'a', type: 'div', nodes: ['testing1'], props: { 'className': 'test-name'} } as ElementProps,
-        { id: 'b', type: ComponentTypes.module, componentType: 'button', nodes: ['testing2'], props: { 'className': 'meow'} } as ElementProps,
-      ],
+      nodes: {
+        'a': { id: 'a', type: 'div', content: 'testing1', props: { 'className': 'test-name'} } as ElementProps,
+        'b': { id: 'b', type: 'Button', content: 'testing2', props: { 'className': 'meow'} } as ElementProps,
+      },
+      root: ['a', 'b'],
     };
     const node = mount(<Document file={file} components={components} />);
     expect(node.text()).to.eq('testing1testing2');
@@ -44,40 +46,47 @@ describe('Document', () => {
 
   it('can render a template component', function() {
     const components = {
-      'button': {
+      'Button': {
+        type: ComponentTypes.template,
         options: {
           href: 'string',
           text: 'string',
         },
         template: {
-          id: 'abc',
-          type: 'a',
-          props: {
-            href: "${options.href}",
-            style: { 'display': 'block' },
-          },
-          nodes: [
-            {
+          nodes: {
+            'abc': {
+              id: 'abc',
+              type: 'a',
+              childIds: ['qed'],
+              props: {
+                href: "${options.href}",
+                style: { 'display': 'block' },
+              },
+            },
+            'qed': {
               id: 'qed',
               type: 'span',
-              nodes: ["${options.text}"]
-            }
-          ],
-        } as ElementProps,
+              content: "${options.text}",
+            },
+          },
+          root: ['abc'],
+        } as Template,
       },
     };
     const file = {
       version: Versions.v1,
-      body: [
-        { id: 'a', type: 'div', nodes: ['testing1'], props: { 'className': 'test-name'} } as ElementProps,
-        { id: 'b', type: ComponentTypes.template, componentType: 'button', options: { href: 'https://tanuki.fun', text: 'Pizza'} } as ElementProps,
-      ],
+      nodes: {
+        'a': { id: 'a', type: 'div', childIds: ['c'], props: { 'className': 'test-name'} } as ElementProps,
+        'b': { id: 'b', type: 'Button', options: { href: 'https://tanuki.fun', text: 'Pizza'} } as ElementProps,
+        'c': { id: 'c', type: 'span', content: 'testing1' } as ElementProps,
+      },
+      root: ['a', 'b'],
     };
     const node = mount(<Document debug={true} file={file} components={components} />);
     expect(node.text()).to.eq('testing1Pizza');
 
     expect(node.find('a').first().props().href).to.eq('https://tanuki.fun');
-    expect((node.html().match(/data\-tanuki\-id\=\"b\"/g) || []).length).to.eq(1);
+    expect((node.html().match(/data\-tanuki\-id\=\"b-abc\"/g) || []).length).to.eq(1);
     expect((node.html().match(/data\-tanuki\-id\=\"b-qed\"/g) || []).length).to.eq(1);
   });
 });
