@@ -17,7 +17,6 @@ export type ElementProps = {
   props?: object,
   content?: string | number,
   childIds?: Array<string>,
-  _templatedParentId?: 'string';
 };
 
 export type Template = {
@@ -80,7 +79,7 @@ const TanukiDocumentContext = React.createContext<DocumentProps>({ file: { versi
 const useTanukiDocumentContext = () => React.useContext(TanukiDocumentContext);
 
 const TanukiElement = (props: ElementProps) => {
-  let {type, id, childIds, _templatedParentId, ...otherProps} = props;
+  let {type, id, childIds, ...otherProps} = props;
   const rootProps = useTanukiDocumentContext();
 
   let Component: string | React.FunctionComponent<any> | React.ComponentClass<any, any> = type;
