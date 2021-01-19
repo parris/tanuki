@@ -1,0 +1,16 @@
+html, body, #root {
+  height: 100%;
+}
+
+.BodyTree {
+  height: calc(100% - 22px); /* minus padding and borders */
+}
+
+.Row {
+  display: flex;
+  flex-direction: row;
+}
+
+.Row * {
+  flex: 1;
+}
