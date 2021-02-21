@@ -1,27 +1,56 @@
-import { ApolloServer } from 'apollo-server';
-import schema from './graphql/schema';
-import createRequestId from './utils/createRequestId';
+import * as Koa from 'koa';
+import * as requestLogger from 'koa-logger-winston';
+import * as bodyParser from 'koa-bodyparser';
+import cookie from 'koa-cookie';
+import * as cors from 'kcors';
+import postgraphile from 'postgraphile';
+import { Logger } from 'winston';
+import * as chalk from 'chalk'
+import * as dotenv from 'dotenv';
+import * as koaStatic from 'koa-static';
+import * as koaMount from 'koa-mount';
+import { graphqlUploadKoa } from 'graphql-upload';
+import * as events from 'events';
+import * as AWS from 'aws-sdk';
+
 import logger from './utils/logger';
+import handleErrors from './graphql/handleErrors';
+import getGraphqlConfig from './graphql/config';
+import { createPgPool } from './graphql/pgPool';
+import { startSchemaWatcher } from './graphql/schemaWatcher';
+import middleware from './middleware';
 
-const loggingPlugin = {
-  requestDidStart(requestContext) {
-    const requestID = createRequestId();
-    logger.info(requestContext.request.operationName, { requestID, query: requestContext.request.operationName === 'IntrospectionQuery' ? 'omitted' : requestContext.request.query });
+dotenv.config({ path: `${__dirname}/../.env-personal` });
+dotenv.config({ path: `${__dirname}/../.env` });
 
-    return {
-      didEncounterErrors(requestContext) {
-        logger.error(`${requestContext.request.operationName} (${requestContext.errors.length} errors)`, { requestID, query: requestContext.request.query, errors: requestContext.errors });
-      },
-    };
-  },
-};
-
-const server = new ApolloServer({
-  ...schema,
-  plugins: [
-    loggingPlugin,
-  ],
+events.EventEmitter.defaultMaxListeners = 100;
+AWS.config.update({
+  region: 'us-east-1',
+  accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+  secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
 });
-server.listen({ port: process.env.PORT || 4000 }).then(({ url }) => {
-  logger.info(`🚀  Server ready at ${url}`);
-});
+
+async function startApp() {
+  const app = new Koa();
+
+  app.use(requestLogger(logger as unknown as Logger));
+  app.use(handleErrors);
+  app.use(cors());
+  app.use(bodyParser());
+  app.use(graphqlUploadKoa());
+  app.use(cookie());
+  app.use(koaMount('/uploads', koaStatic(`${__dirname}/../uploads`, { gzip: true })));
+  middleware({ app });
+
+  const graphqlConfig = getGraphqlConfig();
+  const pgPool = createPgPool(graphqlConfig);
+  await startSchemaWatcher(pgPool, 'public', graphqlConfig);
+  app.use(postgraphile(pgPool, 'public', graphqlConfig));
+
+  await app.listen(process.env.PORT);
+  logger.info(chalk.green(`Server started on: ${process.env.HOST || `http://localhost:${process.env.PORT}`}`));
+
+  return app;
+}
+
+startApp();

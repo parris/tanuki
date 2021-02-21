@@ -17,8 +17,8 @@ export const up = (db: Knex) : Promise<any[]> => (
         update_updated_at_timestamp();
     `),
     db.schema.raw(`
-      CREATE TRIGGER screen_update_time_trigger BEFORE UPDATE
-        ON public.screen FOR EACH ROW EXECUTE PROCEDURE
+      CREATE TRIGGER dcoument_update_time_trigger BEFORE UPDATE
+        ON public.document FOR EACH ROW EXECUTE PROCEDURE
         update_updated_at_timestamp();
     `),
   ])
@@ -26,7 +26,7 @@ export const up = (db: Knex) : Promise<any[]> => (
 
 export const down = (db: Knex) : Promise<any[]> => (
   Promise.all([
-    db.schema.raw('DROP TRIGGER screen_update_time_trigger ON public."screen";'),
+    db.schema.raw('DROP TRIGGER dcoument_update_time_trigger ON public."document";'),
     db.schema.raw('DROP TRIGGER user_update_time_trigger ON public."user";'),
     db.schema.raw('DROP FUNCTION update_updated_at_timestamp'),
   ])

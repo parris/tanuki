@@ -5,3 +5,6 @@ document/public
 !document/public/index.html
 yarn-error.log
 .env-personal
+
+server/uploads/*
+!server/uploads/.keep
