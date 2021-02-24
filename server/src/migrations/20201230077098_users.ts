@@ -20,6 +20,8 @@ export const up = (db: any) : Promise<any[]> => (
       table.jsonb('avatar_crop').defaultTo('{}');
       table.timestamps(true, true);
     }),
+
+    db.schema.raw(`comment on table public.user is E'@omit create,all';`),
     db.schema.raw(`
       CREATE TYPE public.jwt_token AS (
         role text,

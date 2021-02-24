@@ -14,7 +14,6 @@ function removePrivateQueries(builder) {
 
 function removePrivateMutations(builder) {
   builder.hook('GraphQLObjectType:fields', (spec) => {
-    delete spec.createUser;
     delete spec.deleteUser;
     delete spec.deleteUserById;
     delete spec.deleteUserByEmail;

@@ -9,6 +9,7 @@ export const up = (db: any) : Promise<any[]> => (
       table.timestamp('created_at');
       table.timestamp('last_used_at');
     }),
+    db.schema.raw(`comment on table public.session is E'@omit create,read,update,delete,filter,order,all,many,execute';`),
     db.schema.raw('ALTER TABLE public.session ENABLE ROW LEVEL SECURITY;'),
     db.schema.raw('GRANT SELECT, UPDATE, INSERT, DELETE ON TABLE public.session TO tanuki_admin;'),
     db.schema.raw('GRANT USAGE ON SEQUENCE public.session_id_seq TO tanuki_admin'),

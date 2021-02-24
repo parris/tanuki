@@ -7,7 +7,7 @@ import {
 } from './fieldPlugin';
 import hashIdQueryArgsPlugin from './queryPlugin';
 
-export default [
+export const hashIdPlugins = [
   hashIdOutputPlugin,
   hashIdInputPlugin,
   hashIdNodeIdPlugin,

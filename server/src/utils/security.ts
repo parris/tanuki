@@ -38,16 +38,14 @@ export function createJWT(id: string | null, role: string): string {
 }
 
 export function getAdminJWT(): string {
-  return encrypt(
-    jsonwebtoken.sign(
-      JSON.parse(process.env.ADMIN_JWT as string) as string,
-      process.env.APP_SECRET as string,
-      {
-        audience: 'postgraphile',
-        issuer: 'postgraphile',
-        expiresIn: '1 day',
-      },
-    ),
+  return jsonwebtoken.sign(
+    JSON.parse(process.env.ADMIN_JWT as string) as string,
+    process.env.APP_SECRET as string,
+    {
+      audience: 'postgraphile',
+      issuer: 'postgraphile',
+      expiresIn: '1 day',
+    },
   );
 }
 

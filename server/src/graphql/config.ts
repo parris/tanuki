@@ -2,12 +2,12 @@ import { makePluginHook, PostGraphileOptions, Plugin } from 'postgraphile';
 import OperationHooks from '@graphile/operation-hooks';
 import PgPubsub from '@graphile/pg-pubsub';
 
-import PostgraphilePluginHashId from './plugins/hashids';
+import { hashIdPlugins } from './plugins/hashids';
 import UploadFieldPlugin from './plugins/uploads/plugin';
-import knexMigrations from './services/knexMigrations';
+import document from './services/document';
 import user from './services/user';
-import session from './services/session';
 import { resolveUpload } from './plugins/uploads';
+import websocketSessions from '../middleware/websocketSessions';
 
 const pluginHook = makePluginHook([OperationHooks, PgPubsub]);
 
@@ -37,12 +37,14 @@ const config = {
   appendPlugins: ([] as Plugin[]).concat(
     UploadFieldPlugin,
 
-    knexMigrations,
     user,
-    session,
+    document,
 
-    PostgraphilePluginHashId,
+    hashIdPlugins,
   ),
+  websocketMiddlewares: [
+    websocketSessions,
+  ],
   graphileBuildOptions: {
     // For any field from the database that we want to have an upload, we *can* shim it here
     uploadFieldDefinitions: [

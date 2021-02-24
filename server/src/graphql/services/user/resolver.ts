@@ -139,7 +139,7 @@ export const register = async (_, { input: { email, password, verifyPassword } }
     const passHash = await hashPassword(password, salt);
 
     const createdUser = await pgClient.query(
-      'INSERT INTO user (email, password_hash, password_salt) VALUES ($1, $2, $3, $4) RETURNING *',
+      'INSERT INTO public.user (email, password_hash, password_salt) VALUES ($1, $2, $3) RETURNING *',
       [email, passHash, salt],
     );
 
@@ -173,7 +173,7 @@ export const login = async (_, { input: { email, password } }, context) => {
   try {
     await pgClient.query(adminJWTToSql());
 
-    const user = await pgClient.query('SELECT * FROM user WHERE email = $1', [email]);
+    const user = await pgClient.query('SELECT * FROM public.user WHERE email = $1', [email]);
 
     if (user.rowCount === 0) {
       throw new Error('Error please try again');
@@ -211,14 +211,14 @@ export const updatePassword = async (_, { input: { oldPassword, password, verify
   try {
     await pgClient.query(adminJWTToSql());
     const result = await pgClient.query(
-      'SELECT password_salt FROM user WHERE id = $1',
+      'SELECT password_salt FROM public.user WHERE id = $1',
       [jwt.user_id],
     );
     const { rows: [row] } = result;
     salt = row.password_salt;
     const oldPassHash = await hashPassword(oldPassword, salt);
     const result2 = await pgClient.query(
-      'SELECT id, password_salt FROM user WHERE id = $1 and password_hash = $2',
+      'SELECT id, password_salt FROM public.user WHERE id = $1 and password_hash = $2',
       [jwt.user_id, oldPassHash],
     );
     if (result2.rowCount === 0) {
@@ -233,7 +233,7 @@ export const updatePassword = async (_, { input: { oldPassword, password, verify
     await pgClient.query(adminJWTToSql());
     const newPassHash = await hashPassword(password, salt);
     await pgClient.query(
-      'UPDATE user SET password_hash = $1 WHERE id = $2',
+      'UPDATE public.user SET password_hash = $1 WHERE id = $2',
       [newPassHash, jwt.user_id],
     );
     await pgClient.query('commit');
@@ -255,7 +255,7 @@ export const updateEmail = async (_, { newEmail }, { jwtClaims, pgClient }) => {
   try {
     await pgClient.query(adminJWTToSql());
     await pgClient.query(
-      'UPDATE user SET email = $1 WHERE id = $2',
+      'UPDATE public.user SET email = $1 WHERE id = $2',
       [newEmail, jwt.user_id],
     );
     await pgClient.query('commit');
@@ -280,11 +280,11 @@ export const forgotPassword = async (_, { email }, context) => {
   try {
     await pgClient.query(adminJWTToSql());
     await pgClient.query(
-      'UPDATE user SET password_reset_token = $1 WHERE email = $2 returning *',
+      'UPDATE public.user SET password_reset_token = $1 WHERE email = $2 returning *',
       [token, email],
     );
     const { rows: [user] } = await pgClient.query(
-      'SELECT id FROM user WHERE email = $1',
+      'SELECT id FROM public.user WHERE email = $1',
       [email],
     );
     await pgClient.query('commit');
@@ -335,13 +335,13 @@ export const finishForgotPassword = async (_, { input: { userId, password, verif
   await pgClient.query('begin');
   try {
     await pgClient.query(adminJWTToSql());
-    const { rows: [row] } = await pgClient.query('SELECT password_salt, password_reset_token, role FROM user WHERE id = $1', [privateuserId]);
+    const { rows: [row] } = await pgClient.query('SELECT password_salt, password_reset_token, role FROM public.user WHERE id = $1', [privateuserId]);
     if (row.password_reset_token === null || row.password_reset_token !== token) {
       throw new Error('Password reset token is invalid');
     }
     const passwordHash = await hashPassword(password, row.password_salt);
     const user = await pgClient.query(
-      "UPDATE user SET password_hash = $1, password_reset_token = null WHERE id = $2 RETURNING *",
+      "UPDATE public.user SET password_hash = $1, password_reset_token = null WHERE id = $2 RETURNING *",
       [passwordHash, privateuserId],
     );
     await pgClient.query('commit');
@@ -364,7 +364,7 @@ export const finishForgotPasswordWithEmail = async (_, args, context) => {
 
   try {
     await context.pgClient.query(adminJWTToSql());
-    const user = await context.pgClient.query("SELECT id FROM user where email = $1", [email]);
+    const user = await context.pgClient.query("SELECT id FROM public.user where email = $1", [email]);
     args.input.userId = userPrivateToPublicId(BigInt(parseInt(user.rows[0].id, 10)));
     return await finishForgotPassword(_, args, context);
   } catch (e) {
