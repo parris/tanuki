@@ -8,3 +8,4 @@ yarn-error.log
 
 server/uploads/*
 !server/uploads/.keep
+tanuki.code-workspace
