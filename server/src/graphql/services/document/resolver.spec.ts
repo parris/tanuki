@@ -283,5 +283,63 @@ describe('document resolver', () => {
         expect(body.nodes[newNodeId].testing).to.equal(1);
       });
     });
+
+    describe('bodyPatchNode events', () => {
+      it('protects against invalid nodeIds', async function() {
+        await expect(wrapCreateDocumentChange(
+          () => {},
+          null,
+          { input: { documentChange: { documentId: 1, change: JSON.stringify({ eventType: 'bodyPatchNode', nodeId: 1 }) }} },
+          context,
+          null,
+        )).to.be.rejectedWith(/must have nodeId/);
+        await expect(wrapCreateDocumentChange(
+          () => {},
+          null,
+          { input: { documentChange: { documentId: 1, change: JSON.stringify({ eventType: 'bodyPatchNode' }) }} },
+          context,
+          null,
+        )).to.be.rejectedWith(/must have nodeId/);
+      });
+
+      it('protects against invalid nodes', async function() {
+        await expect(wrapCreateDocumentChange(
+          () => {},
+          null,
+          { input: { documentChange: { documentId: 1, change: JSON.stringify({ eventType: 'bodyPatchNode', nodeId: 'a', node: null }) }} },
+          context,
+          null,
+        )).to.be.rejectedWith(/must have a \"node\"/);
+        await expect(wrapCreateDocumentChange(
+          () => {},
+          null,
+          { input: { documentChange: { documentId: 1, change: JSON.stringify({ eventType: 'bodyPatchNode', nodeId: 'a', node: 1 }) }} },
+          context,
+          null,
+        )).to.be.rejectedWith(/must have a \"node\"/);
+      });
+
+      xit('patchs a node', async function() {
+        await wrapCreateDocumentChange(
+          () => {},
+          null,
+          { input: {
+            documentChange: {
+              documentId: 1,
+              change: JSON.stringify({
+                eventType: 'bodyPatchNode',
+                nodeId: 'c',
+                node: { hello: 'world'},
+              }),
+            }}
+          },
+          context,
+          null,
+        );
+        const document = db.public.one(`select * from document where id = 1;`);
+        const body = document.draft.body;
+        expect(body.nodes.c.hello).to.equal('world');
+      });
+    });
   });
 });

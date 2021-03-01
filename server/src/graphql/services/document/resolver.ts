@@ -34,9 +34,6 @@ const eventTypeChangeValidator = {
     if (typeof change.node !== 'object') {
       throw new Error('bodyInsertNode events must have a "node" defined as an object.');
     }
-    if (!(change.node.childIds instanceof Array)) {
-      throw new Error('change.node.childIds must be an array');
-    }
     if (!(change.node.parentId === null || typeof change.node.parentId === 'string')) {
       throw new Error('change.node.parentId must be null or a string.');
     }
@@ -57,7 +54,32 @@ const eventTypeChangeValidator = {
     if (typeof change.position !== 'number') {
       throw new Error('bodyMoveNode requires a position, to understand where in the parent to insert the new node.');
     }
-  }
+  },
+  bodyPatchNode: (change) => {
+    if (!(typeof change.nodeId === 'string')) {
+      throw new Error('bodyPatchNode events must have nodeId defined as a string');
+    }
+    if (change.node === null || typeof change.node !== 'object') {
+      throw new Error('bodyPatchNode events must have a "node" defined as an object.');
+    }
+  },
+};
+
+const processEventData = {
+  bodyInsertNode: (change, args, documentId) => {
+    if (!(change.node.childIds instanceof Array)) {
+      change.node.childIds = [];
+    }
+    change.nodeId = generateNodeId(documentId);
+    change.node.id = change.nodeId;
+    args.input.documentChange.change = JSON.stringify(change);
+  },
+  bodyPatchNode: (change) => {
+    // not allowed to update these during a patch
+    delete change.node.id;
+    delete change.node.parentId;
+    delete change.node.childIds;
+  },
 };
 
 const eventTypeUpdater = {
@@ -133,6 +155,20 @@ const eventTypeUpdater = {
       throw new Error('Could not update draft');
     }
   },
+  bodyPatchNode: async (pgClient, jwtToken, documentId, change) => {
+    const sanitizedId = change.nodeId.replace(/[^a-zA-Z0-9-_]/g, '');
+    try {
+      await pgClient.query('begin');
+      await pgClient.query(JWTToSql(jwtToken));
+      await pgClient.query(
+        `UPDATE public.document SET draft = jsonb_set(draft, '{body,nodes,"${sanitizedId}"}', draft->'body'->'nodes'->'${sanitizedId}' || $2::jsonb, true) WHERE id = $1::int;`,
+        [documentId, JSON.stringify(change.node)],
+      );
+      await pgClient.query('commit');
+    } catch (e) {
+      throw new Error('Could not update draft');
+    }
+  },
 };
 
 function getRandomInt(min, max) {
@@ -159,7 +195,7 @@ export const wrapCreateDocumentChange = async (resolve, _source, args, context, 
     throw new Error('Change must be valid JSON');
   }
 
-  const validEventTypes = ['bodyInsertNode', 'bodyMoveNode', 'bodyUpdateNode', 'bodyDeleteNode', 'metaUpdate'];
+  const validEventTypes = ['bodyInsertNode', 'bodyMoveNode', 'bodyPatchNode', 'bodyDeleteNode', 'metaUpdate'];
   const changeValidator = are(
     {
       eventType: [
@@ -174,23 +210,11 @@ export const wrapCreateDocumentChange = async (resolve, _source, args, context, 
     throw new Error(`Invalid change: ${JSON.stringify(changeValidator.invalidFields)}`);
   }
 
-  // pre-process
-  if (parsedChange.eventType === 'bodyInsertNode') {
-    if (!(parsedChange.node.childIds instanceof Array)) {
-      parsedChange.node.childIds = [];
-    }
-  }
-
-  // validate
   if (eventTypeChangeValidator[parsedChange.eventType]) {
     eventTypeChangeValidator[parsedChange.eventType](parsedChange);
   }
-
-  // post-process
-  if (parsedChange.eventType === 'bodyInsertNode') {
-    parsedChange.nodeId = generateNodeId(documentId);
-    parsedChange.node.id = parsedChange.nodeId;
-    args.input.documentChange.change = JSON.stringify(parsedChange);
+  if (processEventData[parsedChange.eventType]) {
+    processEventData[parsedChange.eventType](parsedChange, args, documentId);
   }
 
   const output = await resolve();
