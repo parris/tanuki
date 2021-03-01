@@ -27,36 +27,105 @@ export const documentChanged = async (
 };
 
 const eventTypeChangeValidator = {
-  'bodyInsertComponent': (change) => {
+  bodyInsertNode: (change) => {
     if (!(change.parentId === null || typeof change.parentId === 'string')) {
-      throw new Error('bodyInsertComponent events must have parentId defined as null or a string');
+      throw new Error('bodyInsertNode events must have parentId defined as null or a string.');
+    }
+    if (typeof change.node !== 'object') {
+      throw new Error('bodyInsertNode events must have a "node" defined as an object.');
+    }
+    if (!(change.node.childIds instanceof Array)) {
+      throw new Error('change.node.childIds must be an array');
+    }
+    if (!(change.node.parentId === null || typeof change.node.parentId === 'string')) {
+      throw new Error('change.node.parentId must be null or a string.');
+    }
+    if (change.parentId !== change.node.parentId) {
+      throw new Error('change.node.parentId must match change.parentId.');
     }
     if (typeof change.position !== 'number') {
-      throw new Error('bodyInsertComponent requires a position, to understand where in the parent to insert the new component.');
+      throw new Error('bodyInsertNode events require a position to understand where in the parent to insert the new node.');
+    }
+  },
+  bodyMoveNode: (change) => {
+    if (!(typeof change.nodeId === 'string')) {
+      throw new Error('bodyMoveNode events must have nodeId defined as a string');
+    }
+    if (!(change.newParentId === null || typeof change.newParentId === 'string')) {
+      throw new Error('bodyMoveNode events must have newParentId defined as null or a string');
+    }
+    if (typeof change.position !== 'number') {
+      throw new Error('bodyMoveNode requires a position, to understand where in the parent to insert the new node.');
     }
   }
 };
 
 const eventTypeUpdater = {
-  'bodyInsertComponent': async (pgClient, jwtToken, documentId, change) => {
-    const sanitizedId = change.id.replace("'", '');
-    const sanitizedParentId = typeof change.parentId === 'string' ? change.parentId.replace("'", '') : null;
+  bodyInsertNode: async (pgClient, jwtToken, documentId, change) => {
+    const sanitizedId = change.nodeId.replace(/[^a-zA-Z0-9-_]/g, '');
+    const sanitizedParentId = typeof change.parentId === 'string' ? change.parentId.replace(/[^a-zA-Z0-9-_]/g, '') : null;
     try {
       await pgClient.query('begin');
       await pgClient.query(JWTToSql(jwtToken));
       await pgClient.query(
         `UPDATE public.document SET draft = jsonb_set(draft, '{body,nodes,"${sanitizedId}"}', $2::jsonb, true) WHERE id = $1::int;`,
-        [documentId, JSON.stringify(change.component)],
+        [documentId, JSON.stringify(change.node)],
       );
       if (change.parentId) {
         await pgClient.query(
           `UPDATE public.document SET draft = jsonb_insert(draft, '{body,nodes,"${sanitizedParentId}",childIds,${change.position}}'::text[], to_jsonb($2::text)) WHERE id = $1::int;`,
-          [documentId, change.id],
+          [documentId, change.nodeId],
         );
       } else {
         await pgClient.query(
           `UPDATE public.document SET draft = jsonb_insert(draft, '{body,root,${change.position}}'::text[], to_jsonb($2::text)) WHERE id = $1::int;`,
-          [documentId, change.id],
+          [documentId, change.nodeId],
+        );
+      }
+      await pgClient.query('commit');
+    } catch (e) {
+      throw new Error('Could not update draft');
+    }
+  },
+  bodyMoveNode: async (pgClient, jwtToken, documentId, change) => {
+    const sanitizedId = change.nodeId.replace(/[^a-zA-Z0-9-_]/g, '');
+    const sanitizedNewParentId = typeof change.newParentId === 'string' ? change.newParentId.replace(/[^a-zA-Z0-9-_]/g, '') : null;
+    try {
+      await pgClient.query('begin');
+      await pgClient.query(JWTToSql(jwtToken));
+      // remove from old parent
+      await pgClient.query(
+        `UPDATE public.document SET draft = (
+          CASE
+            WHEN (draft->'body'->'nodes'->'"${sanitizedId}"'->'parentId') IS NULL
+            THEN jsonb_set(draft, ARRAY['body','root'], (draft->'body'->'root') - '${sanitizedId}', true)
+            WHEN (draft->'body'->'nodes'->'"${sanitizedId}"'->'parentId') IS NOT NULL
+            THEN jsonb_set(draft, ARRAY['body','nodes',draft#>>'{body,nodes,"${sanitizedId}",parentId}','childIds'], (draft->'body'->'nodes'->'${sanitizedId}'->'childIds') - '${sanitizedId}', true)
+          END)
+          WHERE id = $1::int;`,
+        [documentId],
+      );
+      if (change.newParentId) {
+        // set parentId on this object
+        await pgClient.query(
+          `UPDATE public.document SET draft = jsonb_set(draft, '{body,nodes,${sanitizedId},parentId}', '"${sanitizedNewParentId}"'::jsonb, true) WHERE id = $1::int;`,
+          [documentId],
+        );
+        // add to new parent's childIds
+        await pgClient.query(
+          `UPDATE public.document SET draft = jsonb_insert(draft, '{body,nodes,${sanitizedNewParentId},childIds,${change.position}}'::text[], to_jsonb($2::text)) WHERE id = $1::int;`,
+          [documentId, sanitizedId],
+        );
+      } else {
+        // set parentId on this object to null
+        await pgClient.query(
+          `UPDATE public.document SET draft = jsonb_set(draft, '{body,nodes,${sanitizedId},parentId}', 'null'::jsonb, true) WHERE id = $1::int;`,
+          [documentId],
+        );
+        // add to new parent's childIds
+        await pgClient.query(
+          `UPDATE public.document SET draft = jsonb_insert(draft, '{body,root,${change.position}}'::text[], to_jsonb($2::text)) WHERE id = $1::int;`,
+          [documentId, sanitizedId],
         );
       }
       await pgClient.query('commit');
@@ -72,10 +141,11 @@ function getRandomInt(min, max) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
-const generateComponentId = (documentId) => {
-  const hashids = new Hashids(`DocumentComponent${documentId}` as string, hashIdLength as number, tokenAlphabet);
+const generateNodeId = (documentId) => {
+  const hashids = new Hashids(`DocumentNode${documentId}` as string, hashIdLength as number, tokenAlphabet);
   // if you insert in the same millisecond for the same document, then theres a 1 in a 10 million chance of a chance for collision
-  return `${hashids.encode(Date.now())}-${hashids.encode(getRandomInt(0, 9999999))}`;
+  // also note - this is an underscore instead of a dash to just avoid all confusion between escaping and subtraction in sql
+  return `${hashids.encode(Date.now())}_${hashids.encode(getRandomInt(0, 9999999))}`;
 }
 
 export const wrapCreateDocumentChange = async (resolve, _source, args, context, _resolveInfo) => {
@@ -89,7 +159,7 @@ export const wrapCreateDocumentChange = async (resolve, _source, args, context, 
     throw new Error('Change must be valid JSON');
   }
 
-  const validEventTypes = ['bodyInsertComponent', 'bodyMoveComponent', 'bodyUpdateComponent', 'bodyDeleteComponent', 'metaUpdate'];
+  const validEventTypes = ['bodyInsertNode', 'bodyMoveNode', 'bodyUpdateNode', 'bodyDeleteNode', 'metaUpdate'];
   const changeValidator = are(
     {
       eventType: [
@@ -104,12 +174,22 @@ export const wrapCreateDocumentChange = async (resolve, _source, args, context, 
     throw new Error(`Invalid change: ${JSON.stringify(changeValidator.invalidFields)}`);
   }
 
+  // pre-process
+  if (parsedChange.eventType === 'bodyInsertNode') {
+    if (!(parsedChange.node.childIds instanceof Array)) {
+      parsedChange.node.childIds = [];
+    }
+  }
+
+  // validate
   if (eventTypeChangeValidator[parsedChange.eventType]) {
     eventTypeChangeValidator[parsedChange.eventType](parsedChange);
   }
 
-  if (parsedChange.eventType === 'bodyInsertComponent') {
-    parsedChange.id = generateComponentId(documentId);
+  // post-process
+  if (parsedChange.eventType === 'bodyInsertNode') {
+    parsedChange.nodeId = generateNodeId(documentId);
+    parsedChange.node.id = parsedChange.nodeId;
     args.input.documentChange.change = JSON.stringify(parsedChange);
   }
 

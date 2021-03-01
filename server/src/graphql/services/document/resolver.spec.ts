@@ -16,7 +16,7 @@ describe('document resolver', () => {
         id int,
         draft jsonb
       );
-      insert into document values (1, '{ "body": { "root": ["a"], "nodes": { "a": { "id": "a", "childIds": [] }} } }');
+      insert into document values (1, '{ "body": { "root": ["a"], "nodes": { "a": { "parentId": null, "id": "a", "childIds": [] }, "b": { "parentId": null, "id": "b", "childIds": ["c"] }, "c": { "parentId": "b", "id": "c", "childIds": [] }} } }');
     `);
 
     const backup = db.backup();
@@ -49,42 +49,62 @@ describe('document resolver', () => {
       )).to.be.rejectedWith(/change\.eventType must be one of/);
     });
 
-    describe('bodyInsertComponent events', () => {
+    describe('bodyInsertNode events', () => {
       it('protects against invalid parentIds', async function() {
         await expect(wrapCreateDocumentChange(
           () => {},
           null,
-          { input: { documentChange: { documentId: 1, change: JSON.stringify({ eventType: 'bodyInsertComponent', parentId: 1 }) }} },
+          { input: { documentChange: { documentId: 1, change: JSON.stringify({ eventType: 'bodyInsertNode', parentId: 1 }) }} },
           context,
           null,
         )).to.be.rejectedWith(/must have parentId/);
         await expect(wrapCreateDocumentChange(
           () => {},
           null,
-          { input: { documentChange: { documentId: 1, change: JSON.stringify({ eventType: 'bodyInsertComponent' }) }} },
+          { input: { documentChange: { documentId: 1, change: JSON.stringify({ eventType: 'bodyInsertNode' }) }} },
           context,
           null,
         )).to.be.rejectedWith(/must have parentId/);
+      });
+
+      it('protects against mismatching parentIds in the noded', async function() {
+        await expect(wrapCreateDocumentChange(
+          () => {},
+          null,
+          { input: { documentChange: { documentId: 1, change: JSON.stringify({ eventType: 'bodyInsertNode', parentId: '1', node: { parentId: '2'} }) }} },
+          context,
+          null,
+        )).to.be.rejectedWith(/must match/);
       });
 
       it('protects against invalid insert positions', async function() {
         await expect(wrapCreateDocumentChange(
           () => {},
           null,
-          { input: { documentChange: { documentId: 1, change: JSON.stringify({ eventType: 'bodyInsertComponent', parentId: 'a' }) }} },
+          { input: { documentChange: { documentId: 1, change: JSON.stringify({ eventType: 'bodyInsertNode', parentId: 'a', node: { parentId: 'a' } }) }} },
           context,
           null,
-        )).to.be.rejectedWith(/requires a position/);
+        )).to.be.rejectedWith(/require a position/);
         await expect(wrapCreateDocumentChange(
           () => {},
           null,
-          { input: { documentChange: { documentId: 1, change: JSON.stringify({ eventType: 'bodyInsertComponent', parentId: 'a', position: '0' }) }} },
+          { input: { documentChange: { documentId: 1, change: JSON.stringify({ eventType: 'bodyInsertNode', parentId: 'a', position: '0', node: { parentId: 'a' } }) }} },
           context,
           null,
-        )).to.be.rejectedWith(/requires a position/);
+        )).to.be.rejectedWith(/require a position/);
       });
 
-      it('inserts a root component', async function() {
+      it('protects against nodes not being included', async function() {
+        await expect(wrapCreateDocumentChange(
+          () => {},
+          null,
+          { input: { documentChange: { documentId: 1, change: JSON.stringify({ eventType: 'bodyInsertNode', parentId: 'a', position: 0 }) }} },
+          context,
+          null,
+        )).to.be.rejectedWith(/must have a \"node\"/);
+      });
+
+      it('inserts a root node', async function() {
         await wrapCreateDocumentChange(
           () => {},
           null,
@@ -92,10 +112,10 @@ describe('document resolver', () => {
             documentChange: {
               documentId: 1,
               change: JSON.stringify({
-                eventType: 'bodyInsertComponent',
+                eventType: 'bodyInsertNode',
                 parentId: null,
                 position: 0,
-                component: { testing: 1 },
+                node: { parentId: null, testing: 1 },
               }),
             }}
           },
@@ -108,7 +128,7 @@ describe('document resolver', () => {
         expect(body.nodes[body.root[0]].testing).to.equal(1);
       });
 
-      it('inserts a nested component', async function() {
+      it('inserts a nested node', async function() {
         await wrapCreateDocumentChange(
           () => {},
           null,
@@ -116,10 +136,10 @@ describe('document resolver', () => {
             documentChange: {
               documentId: 1,
               change: JSON.stringify({
-                eventType: 'bodyInsertComponent',
+                eventType: 'bodyInsertNode',
                 parentId: 'a',
                 position: 0,
-                component: { testing: 1 },
+                node: { parentId: 'a', testing: 1 },
               }),
             }}
           },
@@ -128,10 +148,139 @@ describe('document resolver', () => {
         );
         const document = db.public.one(`select * from document where id = 1;`);
         const body = document.draft.body;
-        const newComponentId = body.nodes.a.childIds[0];
+        const newNodeId = body.nodes.a.childIds[0];
         expect(body.root.length).to.equal(1);
         expect(body.nodes.a.childIds.length).to.equal(1);
-        expect(body.nodes[newComponentId].testing).to.equal(1);
+        expect(body.nodes[newNodeId].testing).to.equal(1);
+      });
+    });
+    describe('bodyMoveNode events', () => {
+      it('protects against invalid newParentIds', async function() {
+        await expect(wrapCreateDocumentChange(
+          () => {},
+          null,
+          { input: { documentChange: { documentId: 1, change: JSON.stringify({ eventType: 'bodyMoveNode', newParentId: 1, nodeId: 'a' }) }} },
+          context,
+          null,
+        )).to.be.rejectedWith(/must have newParentId/);
+        await expect(wrapCreateDocumentChange(
+          () => {},
+          null,
+          { input: { documentChange: { documentId: 1, change: JSON.stringify({ eventType: 'bodyMoveNode', nodeId: 'a' }) }} },
+          context,
+          null,
+        )).to.be.rejectedWith(/must have newParentId/);
+      });
+
+      it('protects against invalid nodeIds', async function() {
+        await expect(wrapCreateDocumentChange(
+          () => {},
+          null,
+          { input: { documentChange: { documentId: 1, change: JSON.stringify({ eventType: 'bodyMoveNode', newParentId: 'a', nodeId: 1, position: 0 }) }} },
+          context,
+          null,
+        )).to.be.rejectedWith(/must have nodeId/);
+        await expect(wrapCreateDocumentChange(
+          () => {},
+          null,
+          { input: { documentChange: { documentId: 1, change: JSON.stringify({ eventType: 'bodyMoveNode', newParentId: 'a', position: 0 }) }} },
+          context,
+          null,
+        )).to.be.rejectedWith(/must have nodeId/);
+      });
+
+      it('protects against invalid insert positions', async function() {
+        await expect(wrapCreateDocumentChange(
+          () => {},
+          null,
+          { input: { documentChange: { documentId: 1, change: JSON.stringify({ eventType: 'bodyMoveNode', newParentId: 'a', nodeId: 'a' }) }} },
+          context,
+          null,
+        )).to.be.rejectedWith(/requires a position/);
+        await expect(wrapCreateDocumentChange(
+          () => {},
+          null,
+          { input: { documentChange: { documentId: 1, change: JSON.stringify({ eventType: 'bodyMoveNode', newParentId: 'a', position: '0', nodeId: 'a' }) }} },
+          context,
+          null,
+        )).to.be.rejectedWith(/requires a position/);
+      });
+
+      xit('can move a node to the root', async function() {
+        await wrapCreateDocumentChange(
+          () => {},
+          null,
+          { input: {
+            documentChange: {
+              documentId: 1,
+              change: JSON.stringify({
+                eventType: 'bodyMoveNode',
+                newParentId: null,
+                position: 0,
+                nodeId: 'c'
+              }),
+            }}
+          },
+          context,
+          null,
+        );
+        const document = db.public.one(`select * from document where id = 1;`);
+        const body = document.draft.body;
+        expect(body.root.length).to.equal(2);
+        expect(body.nodes[body.root[0]].testing).to.equal(1);
+        expect(body.nodes.b.childIds).to.equal(0);
+      });
+
+      xit('supports jsonb array subtraction by value', () => {
+        const db = newDb();
+          pgMemHelpers(db);
+          db.public.none(`
+            create table page(
+              id int,
+              doc jsonb
+            );
+            insert into page values (1, '{ "hello": { "world": ["a", "b", "c"]} }');
+          `);
+          const example = db.public.one(`select (('{"a": ["b", "c"]}'::jsonb) -> 'a')::jsonb - 'b' as test`);
+          expect(example.test.length).to.equal(1);
+          expect(example.test[0]).to.be('c');
+
+        const page1 = db.public.one(`
+          select (doc->'hello'->'world' - 'a') as subset from public.page WHERE id = 1;
+        `);
+        expect(page1.subset.length).to.equal(2);
+
+        db.public.one(`
+          UPDATE public.page SET doc = jsonb_set(doc, '{hello, world}', doc->'hello'->'world' - 'a', true) WHERE id = 1;
+        `);
+        const page2 = db.public.one(`select * from page where id = 1;`);
+        expect(page2.doc.hello.world.length).to.equal(2);
+      });
+
+      xit('can move a node to another node', async function() {
+        await wrapCreateDocumentChange(
+          () => {},
+          null,
+          { input: {
+            documentChange: {
+              documentId: 1,
+              change: JSON.stringify({
+                eventType: 'bodyMoveNode',
+                newParentId: 'a',
+                position: 0,
+                nodeId: 'c'
+              }),
+            }}
+          },
+          context,
+          null,
+        );
+        const document = db.public.one(`select * from document where id = 1;`);
+        const body = document.draft.body;
+        const newNodeId = body.nodes.a.childIds[0];
+        expect(body.root.length).to.equal(1);
+        expect(body.nodes.a.childIds.length).to.equal(1);
+        expect(body.nodes[newNodeId].testing).to.equal(1);
       });
     });
   });

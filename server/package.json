@@ -35,7 +35,7 @@
     "chai-as-promised": "^7.1.1",
     "minimist": "^1.2.5",
     "mocha": "^8.3.0",
-    "pg-mem": "^1.7.7",
+    "pg-mem": "^1.8.1",
     "ts-node-dev": "^1.0.0-pre.44",
     "typescript": "^4.1.3"
   },
