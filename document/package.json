@@ -14,7 +14,7 @@
     "chai": "^4.2.0",
     "enzyme": "^3.11.0",
     "enzyme-adapter-react-16": "^1.15.3",
-    "jsdom": "^16.4.0",
+    "jsdom": "^16.5.0",
     "mocha": "^6.2.2",
     "react-dom": "^16.13.1",
     "ts-node": "^9.0.0",
